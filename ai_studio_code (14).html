@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>想飞的猪猪 - 快乐版</title>
+    <!-- 设置 Favicon 为猪鼻子 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐽</text></svg>">
+    
+    <!-- 引入 ZCOOL KuaiLe 字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+
+    <style>
+        /* 应用新字体 */
+        body { margin: 0; overflow: hidden; font-family: 'ZCOOL KuaiLe', cursive; user-select: none; }
+        
+        #game-container { position: relative; width: 100vw; height: 100vh; background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); }
+        
+        /* 摄像头预览 */
+        #video-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border: 4px solid #fff;
+            border-radius: 15px;
+            overflow: hidden;
+            z-index: 10;
+            background: black;
+            transform: scaleX(-1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        #input_video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* 左上角：难度设置 */
+        #settings-wrapper {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: width 0.3s ease;
+            overflow: hidden;
+            width: 40px;
+            white-space: nowrap;
+        }
+        #settings-wrapper:hover { width: 300px; }
+        #settings-icon { font-size: 24px; margin-right: 15px; cursor: pointer; padding-left: 5px; }
+        #difficulty-controls { display: flex; flex-direction: column; width: 220px; opacity: 0; transition: opacity 0.3s 0.1s; }
+        #settings-wrapper:hover #difficulty-controls { opacity: 1; }
+        input[type=range] { width: 100%; cursor: pointer; }
+        .diff-label { font-size: 16px; color: #666; display: flex; justify-content: space-between; margin-top: 5px;}
+
+        /* 右上角：排行榜 (样式更新) */
+        #leaderboard {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 40;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: 20px;
+            border: 3px solid #FFD700;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            min-width: 180px;
+            font-family: 'ZCOOL KuaiLe', cursive;
+        }
+        #leaderboard h3 { margin: 0 0 10px 0; color: #E91E63; text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 5px; font-size: 24px; }
+        #leaderboard ol { padding-left: 0; margin: 0; list-style: none; }
+        #leaderboard li { 
+            margin-bottom: 8px; 
+            font-size: 20px; 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .rank-name { color: #FFD700; text-shadow: 1px 1px 0 #555; margin-right: 10px; }
+        .rank-score { color: #FF69B4; font-weight: bold; text-shadow: 1px 1px 0 #fff; }
+
+        /* UI 层 */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        h1 { 
+            position: absolute;
+            top: 12%; 
+            width: 100%;
+            text-align: center;
+            font-size: 90px; /* 字体加大 */
+            color: #FF69B4; 
+            text-shadow: 4px 4px 0 #fff, 6px 6px 0 #333; 
+            margin: 0; 
+            animation: floatText 3s ease-in-out infinite;
+        }
+        @keyframes floatText { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        /* 最终分数 */
+        #final-score-container {
+            position: absolute;
+            top: 38%; 
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 6;
+            text-align: center;
+            display: none;
+            pointer-events: none;
+            width: 100%;
+        }
+        #final-score-title { 
+            font-size: 30px; color: #fff; 
+            text-shadow: 2px 2px 0 #000; margin: 0; margin-bottom: 5px;
+        }
+        #final-score-val { 
+            font-size: 140px; 
+            color: #FFD700; 
+            text-shadow: 5px 5px 0 #E91E63, 10px 10px 20px rgba(0,0,0,0.6);
+            margin: 0;
+            line-height: 1;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        /* 提示框 */
+        .info-box {
+            position: absolute;
+            top: 65%; 
+            left: 50%;
+            transform: translateX(-50%); 
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px 50px;
+            border-radius: 25px;
+            border: 5px solid #FF69B4;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            text-align: center;
+            min-width: 350px;
+        }
+
+        .info-box.charging {
+            top: 50%; 
+            transform: translate(-50%, -50%) scale(2.0); 
+            border-width: 8px;
+            z-index: 100;
+            box-shadow: 0 0 60px rgba(255, 105, 180, 0.6);
+        }
+
+        p { font-size: 26px; color: #333; margin: 5px 0;}
+        
+        #percent-display {
+            font-size: 40px;
+            display: inline-block;
+            min-width: 90px;
+        }
+
+        /* 实时分数 */
+        #score-board {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 70px;
+            color: white;
+            text-shadow: 3px 3px 0 #FF69B4, 5px 5px 0 rgba(0,0,0,0.2);
+            z-index: 4;
+            display: none;
+        }
+
+    </style>
+    
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.150.1/build/three.module.js"
+        }
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- 难度设置 -->
+        <div id="settings-wrapper">
+            <div id="settings-icon">⚙️</div>
+            <div id="difficulty-controls">
+                <div style="font-size:18px; color:#333; margin-bottom:5px;">游戏难度调整</div>
+                <input type="range" id="diff-slider" min="0" max="100" value="50">
+                <div class="diff-label">
+                    <span>简单</span>
+                    <span id="diff-val-text">普通</span>
+                    <span>极难</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 排行榜 -->
+        <div id="leaderboard">
+            <h3>🏆 排行榜</h3>
+            <ol id="leaderboard-list">
+                <!-- JS生成 -->
+            </ol>
+        </div>
+
+        <div id="score-board">0</div>
+        
+        <!-- UI 面板层 -->
+        <div id="ui-layer">
+            <h1 id="game-title">想飞的猪猪</h1>
+            <div id="final-score-container">
+                <h2 id="final-score-title">最终得分</h2>
+                <div id="final-score-val">0</div>
+            </div>
+            <div id="info-panel" class="info-box">
+                <p id="status-text">正在加载模型...</p>
+                <p id="instruction-text" style="font-size: 20px; color: #666; margin-top:10px;">请授予摄像头权限以控制游戏</p>
+            </div>
+        </div>
+
+        <div id="video-container">
+            <video id="input_video"></video>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ==========================================
+        // 0. 音频系统
+        // ==========================================
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playTone(type, startFreq, endFreq, duration, volume = 0.1) {
+            initAudio();
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = type;
+            const now = audioCtx.currentTime;
+            osc.frequency.setValueAtTime(startFreq, now);
+            osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+            gain.gain.setValueAtTime(volume, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            osc.start();
+            osc.stop(now + duration);
+        }
+        function playStartSound() { playTone('square', 440, 1760, 0.3, 0.1); }
+        function playJumpSound() { playTone('square', 300, 600, 0.15, 0.08); }
+        function playGameOverSound() { playTone('sawtooth', 600, 100, 0.6, 0.2); }
+
+        // ==========================================
+        // 1. 排行榜逻辑
+        // ==========================================
+        const leaderboardList = document.getElementById('leaderboard-list');
+        const leaderboardContainer = document.getElementById('leaderboard');
+        const RANK_NAMES = ["第一名", "第二名", "第三名", "第四名", "第五名"];
+
+        function getScores() {
+            const stored = localStorage.getItem('piggy_leaderboard_v2');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function saveScore(newScore) {
+            if (newScore === 0) return;
+            let scores = getScores();
+            scores.push(newScore);
+            scores.sort((a, b) => b - a);
+            scores = scores.slice(0, 5);
+            localStorage.setItem('piggy_leaderboard_v2', JSON.stringify(scores));
+            renderLeaderboard();
+        }
+
+        function renderLeaderboard() {
+            const scores = getScores();
+            leaderboardList.innerHTML = '';
+            if (scores.length === 0) {
+                leaderboardList.innerHTML = '<li style="justify-content:center; color:#999;">暂无记录</li>';
+                return;
+            }
+            scores.forEach((s, index) => {
+                const li = document.createElement('li');
+                const rankName = RANK_NAMES[index] || `第${index+1}名`;
+                li.innerHTML = `<span class="rank-name">${rankName}</span><span class="rank-score">${s}</span>`;
+                leaderboardList.appendChild(li);
+            });
+        }
+        renderLeaderboard();
+
+        // ==========================================
+        // 2. 全局状态
+        // ==========================================
+        const CONFIG = {
+            gravity: 22, jumpForce: 9, pipeSpawnRate: 2.2, pipeSpeed: 7, gapSize: 6
+        };
+
+        const slider = document.getElementById('diff-slider');
+        const diffText = document.getElementById('diff-val-text');
+        
+        function updateDifficulty(val) {
+            CONFIG.pipeSpeed = 4 + (val / 100) * 8;
+            CONFIG.gapSize = 8 - (val / 100) * 3.5;
+            CONFIG.pipeSpawnRate = 3.0 - (val / 100) * 1.8;
+            if (val < 30) diffText.innerText = "休闲";
+            else if (val < 70) diffText.innerText = "普通";
+            else diffText.innerText = "硬核";
+            initAudio();
+        }
+        slider.addEventListener('input', (e) => { updateDifficulty(e.target.value); e.target.blur(); });
+
+        let scene, camera, renderer;
+        let pigGroup, pipes = [], environmentItems = [];
+        let score = 0;
+        let gameState = 'LOADING'; 
+        let isDetectionActive = true; // 控制是否检测手势
+        let lastTime = 0;
+        let timeSinceLastPipe = 0;
+        let birdVelocityY = 0;
+        let hoverTime = 0;
+
+        const uiTitle = document.getElementById('game-title');
+        const uiPanel = document.getElementById('info-panel');
+        const statusText = document.getElementById('status-text');
+        const instructionText = document.getElementById('instruction-text');
+        const scoreEl = document.getElementById('score-board');
+        const finalScoreContainer = document.getElementById('final-score-container');
+        const finalScoreVal = document.getElementById('final-score-val');
+        const settingsWrapper = document.getElementById('settings-wrapper');
+
+        // ==========================================
+        // 3. MediaPipe & 手势核心逻辑
+        // ==========================================
+        const videoElement = document.getElementById('input_video');
+        let armState = 'down'; 
+        let handsUpDuration = 0;
+
+        // 计算手臂相对于垂直向上的角度 (0度=垂直向上, 90度=平举, 180度=垂直向下)
+        function getArmAngle(shoulder, wrist) {
+            // MediaPipe: x 向右, y 向下
+            const dx = wrist.x - shoulder.x;
+            const dy = wrist.y - shoulder.y;
+            // 向量 (dx, dy)。参考向量 (0, -1) 即垂直向上
+            // 使用 atan2 计算相对于 -Y 轴的角度
+            // Math.atan2(y, x) 返回与 X 轴的夹角
+            // 这里我们直接算向量模长和点积
+            // 简化：使用 atan2(dy, dx)
+            // 垂直向上时，dx=0, dy<0 -> atan2(-1, 0) = -PI/2 (-90deg)
+            // 平举右时，dx>0, dy=0 -> atan2(0, 1) = 0 (0deg)
+            // 垂直向下时，dx=0, dy>0 -> atan2(1, 0) = PI/2 (90deg)
+            
+            // 为了方便，我们计算相对于 Shoulder 的绝对角度
+            // 0 = Up, 90 = Side, 180 = Down
+            // 利用 acos 计算与垂直向上向量(0, -1)的夹角
+            // v1 = (0, -1), v2 = (dx, dy)
+            // cos(theta) = (v1.v2) / (|v1||v2|) = -dy / sqrt(dx*dx + dy*dy)
+            
+            const mag = Math.sqrt(dx*dx + dy*dy);
+            if (mag === 0) return 0;
+            const cosTheta = -dy / mag;
+            const angleRad = Math.acos(cosTheta); // 0 ~ PI
+            return angleRad * (180 / Math.PI);
+        }
+
+        function updateLoadingUI(percent) {
+            uiTitle.style.display = 'none';
+            finalScoreContainer.style.display = 'none'; 
+            uiPanel.classList.add('charging');
+            let color = '#ff0000'; 
+            if (percent > 33) color = '#ff8000'; 
+            if (percent > 66) color = '#00aa00'; 
+            statusText.innerHTML = `保持举手... <span id="percent-display" style="color:${color}">${percent}%</span>`;
+            instructionText.innerText = "";
+        }
+
+        function resetReadyUI() {
+            uiPanel.classList.remove('charging'); 
+            instructionText.innerText = "";
+            uiTitle.style.display = 'block'; 
+            if (gameState === 'READY') {
+                finalScoreContainer.style.display = 'none';
+                statusText.innerText = "举起双手 开始游戏";
+                instructionText.innerText = "双手举过头顶以激活";
+            } else if (gameState === 'GAMEOVER') {
+                finalScoreContainer.style.display = 'block'; 
+                statusText.innerText = "举起双手 重新开始游戏";
+            }
+        }
+
+        function onPoseResults(results) {
+            // 如果检测暂停，直接返回
+            if (!isDetectionActive) return;
+            if (!results.poseLandmarks) return;
+
+            const lm = results.poseLandmarks;
+            const leftShoulder = lm[11];
+            const rightShoulder = lm[12];
+            const leftWrist = lm[15];
+            const rightWrist = lm[16];
+            const nose = lm[0]; // 鼻子
+
+            // 1. 游戏开始/重开判定：双手必须举过头顶 (手腕Y < 鼻子Y)
+            const isHandsOverHead = (leftWrist.y < nose.y) && (rightWrist.y < nose.y);
+
+            // 状态：READY 或 GAMEOVER (等待重开)
+            if (gameState === 'READY' || gameState === 'GAMEOVER') {
+                if (isHandsOverHead) {
+                    handsUpDuration++;
+                    const percent = Math.min(100, Math.floor(handsUpDuration/30*100));
+                    updateLoadingUI(percent);
+                    if (handsUpDuration > 30) { 
+                        playStartSound();
+                        startGame(); 
+                    }
+                } else {
+                    if (handsUpDuration > 0) {
+                        handsUpDuration = 0;
+                        resetReadyUI();
+                    }
+                }
+            }
+            // 状态：PLAYING (游戏中)
+            else if (gameState === 'PLAYING') {
+                // 计算角度
+                const leftAngle = getArmAngle(leftShoulder, leftWrist);
+                const rightAngle = getArmAngle(rightShoulder, rightWrist);
+                
+                // 判定逻辑
+                // 上举：锐角 < 80度
+                const isUp = leftAngle < 80 && rightAngle < 80;
+                // 下煽：钝角 > 100度
+                const isDown = leftAngle > 100 && rightAngle > 100;
+
+                if (isUp) {
+                    armState = 'up'; // 蓄力状态
+                } else if (isDown) {
+                    // 如果之前是蓄力状态，现在变成了下煽状态 -> 触发跳跃
+                    if (armState === 'up') {
+                        triggerJump();
+                        armState = 'down'; // 重置
+                    }
+                }
+            }
+        }
+
+        const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.onResults(onPoseResults);
+
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => { await pose.send({image: videoElement}); },
+            width: 320, height: 240
+        });
+        
+        cameraFeed.start().then(() => {
+            gameState = 'READY';
+            resetReadyUI();
+        });
+
+        // ==========================================
+        // 4. Three.js 场景构建
+        // ==========================================
+        function initThree() {
+            const container = document.getElementById('game-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0xE0F7FA, 15, 60);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 2, 14);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
+            scene.add(hemiLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            createEnvironment();
+            createPig();
+            
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            requestAnimationFrame(animate);
+        }
+
+        function createPig() {
+            pigGroup = new THREE.Group();
+            const pinkMat = new THREE.MeshPhongMaterial({ color: 0xFFB6C1 });
+            const darkPinkMat = new THREE.MeshPhongMaterial({ color: 0xE91E63 });
+            const whiteMat = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+            const blackMat = new THREE.MeshPhongMaterial({ color: 0x000000 });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.1), pinkMat);
+            body.castShadow = true;
+            pigGroup.add(body);
+            const snout = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.2), darkPinkMat);
+            snout.position.set(0.8, -0.1, 0);
+            pigGroup.add(snout);
+
+            const addEye = (z) => {
+                const grp = new THREE.Group();
+                const w = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.05), whiteMat);
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), blackMat);
+                p.position.x = 0.04; grp.add(w); grp.add(p);
+                grp.position.set(0.76, 0.25, z); return grp;
+            };
+            pigGroup.add(addEye(0.3)); pigGroup.add(addEye(-0.3));
+
+            const wingGeo = new THREE.BoxGeometry(0.7, 0.1, 0.5);
+            const wingL = new THREE.Mesh(wingGeo, whiteMat); wingL.position.set(-0.2, 0.3, 0.6);
+            const wingR = new THREE.Mesh(wingGeo, whiteMat); wingR.position.set(-0.2, 0.3, -0.6);
+            pigGroup.add(wingL); pigGroup.add(wingR);
+            pigGroup.userData = { wingL, wingR };
+            scene.add(pigGroup);
+            resetPig();
+        }
+
+        function createEnvironment() {
+            const water = new THREE.Mesh(new THREE.PlaneGeometry(300, 60), new THREE.MeshLambertMaterial({ color: 0x006994 }));
+            water.rotation.x = -Math.PI / 2; water.position.y = -9; scene.add(water);
+            const sand = new THREE.Mesh(new THREE.PlaneGeometry(300, 30), new THREE.MeshLambertMaterial({ color: 0xF4A460 }));
+            sand.rotation.x = -Math.PI / 2; sand.position.set(0, -8.9, -20); scene.add(sand);
+
+            const createProp = (type, x, z) => {
+                const g = new THREE.Group();
+                if (type === 'tree') {
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 5, 8), new THREE.MeshLambertMaterial({color:0x8B4513}));
+                    trunk.position.y = 2.5;
+                    const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5, 3, 8), new THREE.MeshLambertMaterial({color:0x228B22}));
+                    leaves.position.y = 5; g.add(trunk); g.add(leaves);
+                } else {
+                    const b = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 5), new THREE.MeshLambertMaterial({color:0xFFFFF0}));
+                    b.position.y = 2;
+                    const r = new THREE.Mesh(new THREE.ConeGeometry(4, 2.5, 4), new THREE.MeshLambertMaterial({color:0xFF4500}));
+                    r.rotation.y = Math.PI/4; r.position.y = 5.25; g.add(b); g.add(r);
+                }
+                g.position.set(x, -9, z); scene.add(g); environmentItems.push(g);
+            };
+            for (let i = -50; i < 250; i+=30) {
+                createProp('tree', i, -18 - Math.random()*5);
+                if (i % 90 === 0) createProp('house', i + 15, -25);
+            }
+        }
+
+        function createPipe() {
+            const gapY = (Math.random() * 8) - 4;
+            const pipeRadius = 1.8;
+            const pipeGeo = new THREE.CylinderGeometry(pipeRadius, pipeRadius, 24, 32);
+            const pipeMat = new THREE.MeshPhongMaterial({ color: 0x4CAF50, shininess: 60 }); 
+            const capMat = new THREE.MeshPhongMaterial({ color: 0x388E3C });
+            const makePipePart = (yPos) => {
+                const p = new THREE.Mesh(pipeGeo, pipeMat); p.position.y = yPos; p.castShadow = true;
+                const cap = new THREE.Mesh(new THREE.CylinderGeometry(pipeRadius+0.2, pipeRadius+0.2, 1, 32), capMat);
+                cap.position.y = yPos > 0 ? yPos - 12 : yPos + 12; cap.castShadow = true;
+                const group = new THREE.Group(); group.add(p); group.add(cap); return group;
+            }
+            const topPart = makePipePart(gapY + (CONFIG.gapSize/2) + 12);
+            const bottomPart = makePipePart(gapY - (CONFIG.gapSize/2) - 12);
+            const pipeGroup = new THREE.Group();
+            pipeGroup.add(topPart); pipeGroup.add(bottomPart);
+            pipeGroup.position.set(25, 0, 0); pipeGroup.userData = { passed: false };
+            scene.add(pipeGroup); pipes.push(pipeGroup);
+        }
+
+        // ==========================================
+        // 5. 游戏逻辑
+        // ==========================================
+        function resetPig() {
+            pigGroup.position.set(-4, 0, 0);
+            pigGroup.rotation.set(0, 0, 0);
+            birdVelocityY = 0; hoverTime = 0;
+        }
+
+        function triggerJump() {
+            if (gameState === 'PLAYING') {
+                birdVelocityY = CONFIG.jumpForce;
+                playJumpSound(); 
+            }
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            score = 0;
+            scoreEl.innerText = score;
+            scoreEl.style.display = 'block';
+            
+            uiPanel.style.display = 'none';
+            uiTitle.style.display = 'none';
+            finalScoreContainer.style.display = 'none';
+            settingsWrapper.style.display = 'none';
+            leaderboardContainer.style.display = 'none'; 
+            uiPanel.classList.remove('charging'); 
+
+            pipes.forEach(p => scene.remove(p));
+            pipes = [];
+            resetPig();
+            lastTime = performance.now();
+            timeSinceLastPipe = CONFIG.pipeSpawnRate;
+        }
+
+        function checkCollision(pipeGroup) {
+            const pigBox = new THREE.Box3().setFromObject(pigGroup); pigBox.expandByScalar(-0.4); 
+            const topBox = new THREE.Box3().setFromObject(pipeGroup.children[0]);
+            const bottomBox = new THREE.Box3().setFromObject(pipeGroup.children[1]);
+            return pigBox.intersectsBox(topBox) || pigBox.intersectsBox(bottomBox);
+        }
+
+        function gameOver() {
+            playGameOverSound();
+            gameState = 'DYING';
+            // 立即停止检测
+            isDetectionActive = false;
+
+            scoreEl.style.display = 'none';
+            finalScoreVal.innerText = score;
+            saveScore(score);
+
+            uiTitle.style.display = 'block';
+            finalScoreContainer.style.display = 'block';
+
+            setTimeout(() => {
+                gameState = 'GAMEOVER';
+                
+                uiPanel.style.display = 'block';
+                statusText.innerText = "举起双手 重新开始游戏";
+                instructionText.innerText = ""; 
+                settingsWrapper.style.display = 'flex';
+                leaderboardContainer.style.display = 'block'; 
+                uiPanel.classList.remove('charging');
+                
+                // 提示出现后，恢复检测
+                isDetectionActive = true;
+            }, 500);
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            const dt = Math.min((time - lastTime) / 1000, 0.1);
+            lastTime = time;
+
+            const bgSpeed = (gameState === 'PLAYING') ? CONFIG.pipeSpeed * 0.6 : 2;
+            environmentItems.forEach(item => {
+                item.position.x -= bgSpeed * dt;
+                if (item.position.x < -40) item.position.x += 290;
+            });
+
+            if (gameState === 'READY' || gameState === 'GAMEOVER' || gameState === 'DYING') {
+                hoverTime += dt * 3;
+                pigGroup.position.y = Math.sin(hoverTime) * 0.5;
+                pigGroup.rotation.z = 0; pigGroup.rotation.x = 0;
+            }
+
+            if (gameState === 'PLAYING') {
+                birdVelocityY -= CONFIG.gravity * dt;
+                pigGroup.position.y += birdVelocityY * dt;
+                const targetRot = Math.min(Math.PI / 5, Math.max(-Math.PI / 4, (birdVelocityY * 0.12)));
+                pigGroup.rotation.z = targetRot;
+
+                const wingSpeed = birdVelocityY > 0 ? 25 : 10;
+                const wAngle = Math.abs(Math.sin(time * 0.01 * wingSpeed)) * 0.6;
+                pigGroup.userData.wingL.rotation.z = wAngle;
+                pigGroup.userData.wingR.rotation.z = -wAngle;
+
+                if (pigGroup.position.y < -9.5 || pigGroup.position.y > 9.5) gameOver();
+
+                timeSinceLastPipe += dt;
+                if (timeSinceLastPipe > CONFIG.pipeSpawnRate) { createPipe(); timeSinceLastPipe = 0; }
+
+                for (let i = pipes.length - 1; i >= 0; i--) {
+                    const group = pipes[i];
+                    group.position.x -= CONFIG.pipeSpeed * dt;
+                    if (Math.abs(group.position.x - pigGroup.position.x) < 3) {
+                        if (checkCollision(group)) gameOver();
+                    }
+                    if (!group.userData.passed && group.position.x < pigGroup.position.x) {
+                        score++; scoreEl.innerText = score; group.userData.passed = true;
+                    }
+                    if (group.position.x < -25) { scene.remove(group); pipes.splice(i, 1); }
+                }
+            }
+            renderer.render(scene, camera);
+        }
+
+        initThree();
+    </script>
+</body>
+</html>
